@@ -27,25 +27,25 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     // Time segmentation process
     auto startTime = std::chrono::steady_clock::now();
 
-    typename pcl::PointCloud<PointT>::Ptr filtered_cloud(new pcl::PointCloud<PointT>());
+    typename pcl::PointCloud<PointT>::Ptr filteredCloud(new pcl::PointCloud<PointT>());
     // Create the filtering object: down-sample the dataset using a given leaf size
     pcl::VoxelGrid<PointT> vg;
     vg.setInputCloud(cloud);
     vg.setLeafSize(filterRes, filterRes, filterRes);
-    vg.filter(*filtered_cloud);
+    vg.filter(*filteredCloud);
 
     // Filter point cloud that is out of region of interest
     pcl::CropBox<PointT> region(true);
     region.setMin(minPoint);
     region.setMax(maxPoint);
-    region.setInputCloud(filtered_cloud);
-    region.filter(*filtered_cloud);
+    region.setInputCloud(filteredCloud);
+    region.filter(*filteredCloud);
 
     std::vector<int> indices;
     // Filter point cloud on the roof of host vehicle
     region.setMin(Eigen::Vector4f(-1.5, -1.7, -1, 1));
     region.setMax(Eigen::Vector4f(2.6, 1.7, -0.4, 1));
-    region.setInputCloud(filtered_cloud);
+    region.setInputCloud(filteredCloud);
     region.filter(indices);
 
     pcl::PointIndices::Ptr inliers(new pcl::PointIndices());
@@ -56,16 +56,16 @@ typename pcl::PointCloud<PointT>::Ptr ProcessPointClouds<PointT>::FilterCloud(ty
     // Create the filtering object
     pcl::ExtractIndices<PointT> extract;
     // Extract the point cloud on roof
-    extract.setInputCloud(filtered_cloud);
+    extract.setInputCloud(filteredCloud);
     extract.setIndices(inliers);
     extract.setNegative(true);
-    extract.filter(*filtered_cloud);
+    extract.filter(*filteredCloud);
 
     auto endTime = std::chrono::steady_clock::now();
     auto elapsedTime = std::chrono::duration_cast<std::chrono::milliseconds>(endTime - startTime);
     std::cout << "filtering took " << elapsedTime.count() << " milliseconds" << std::endl;
 
-    return filtered_cloud;
+    return filteredCloud;
 
 }
 
@@ -126,12 +126,10 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 template<typename PointT>
 std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> ProcessPointClouds<PointT>::customSegment(typename pcl::PointCloud<PointT>::Ptr cloud, int maxIterations, float distanceThreshold)
 {
+    
     std::unordered_set<int> inliersResult;
-	srand(time(NULL));
-	
-	// TODO: Fill in this function
+    srand(time(NULL));
 
-	// For max iterations
 	while(maxIterations--)
 	{
 		std::unordered_set<int> inliers;
@@ -162,18 +160,16 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
 		{
 			if (inliers.count(index)>0)
 				continue;
-			//pcl::PointXYZ point = cloud->points[index];
-			float x = cloud->points[index].x;
-			float y = cloud->points[index].y;
-			float z = cloud->points[index].z;
-			float d = fabs(a*x + b*y + c*z + d)/sqrt(a*a + b*b + c*c);
-			if(d<distanceThreshold)
+			PointT point = cloud->points[index];
+			float x4 = point.x;
+			float y4 = point.y;
+			float z4 = point.z;
+			float dist = fabs(a*x4 + b*y4 + c*z4 + d)/sqrt(a*a + b*b + c*c);
+			if(dist<=distanceThreshold)
 				inliers.insert(index);
 		}
 		if(inliers.size()>inliersResult.size())
-		{
-			inliersResult = inliers;
-		}
+		    inliersResult = inliers;
 	}
 
     typename pcl::PointCloud<PointT>::Ptr obstCloud (new pcl::PointCloud<PointT> ());
@@ -181,15 +177,14 @@ std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT
     
 	for(int index = 0; index < cloud->points.size(); index++)
 	{
-		//pcl::PointXYZ point = cloud->points[index];
+		PointT point = cloud->points[index];
 		if(inliersResult.count(index))
-			planeCloud->points.push_back(cloud->points[index]);
+			planeCloud->points.push_back(point);
 		else
-			obstCloud->points.push_back(cloud->points[index]);
+			obstCloud->points.push_back(point);
 	}
 
-    std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr> segResult(obstCloud, planeCloud);
-    return segResult;
+    return std::pair<typename pcl::PointCloud<PointT>::Ptr, typename pcl::PointCloud<PointT>::Ptr>(obstCloud, planeCloud);
 }
 
 
